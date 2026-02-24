@@ -1,101 +1,83 @@
-from transformers import AutoImageProcessor, AutoModelForImageClassification
+from transformers import pipeline
 from PIL import Image, UnidentifiedImageError
-import torch
-import cv2
-import os
+from app.core.config import settings
 
 class DeepfakeDetector:
     """
-    A service to detect whether an image or video frame is real or a deepfake using a
-    pre-trained Hugging Face model. This implementation matches the official usage
-    example for the model to ensure accuracy.
+    A service to detect whether an image is real or a deepfake using a
+    pre-trained Hugging Face model.
     """
     def __init__(self):
         """
-        Initializes the DeepfakeDetector by loading the model and its processor
-        from Hugging Face.
+        Initializes the DeepfakeDetector by loading the image classification
+        pipeline from Hugging Face.
         """
-        self.model_name = "prithivMLmods/Deep-Fake-Detector-v2-Model"
         try:
-            self.processor = AutoImageProcessor.from_pretrained(self.model_name)
-            self.model = AutoModelForImageClassification.from_pretrained(self.model_name)
+            # Load the specified model for image classification
+            self.pipe = pipeline("image-classification", model=settings.DEEPFAKE_MODEL)
         except Exception as e:
+            # Handle potential errors during model loading (e.g., network issues)
             print(f"Error loading model: {e}")
             raise
 
-    async def detect(self, file_path: str) -> dict | None:
+    def detect(self, file_path: str) -> dict | None:
         """
-        Asynchronously analyzes an image or video from a given file path to determine
-        if it is a deepfake.
+        Analyzes an image from a given file path to determine if it is a
+        deepfake.
 
         Args:
-            file_path: The path to the file to be analyzed.
+            file_path: The path to the image file to be analyzed.
 
         Returns:
-            A dictionary with the 'label' ('REAL' or 'FAKE') and a 'score',
-            or None if the analysis fails.
+            A dictionary with 'real_score', 'fake_score', 'best_label', 
+            'best_score', and 'all_predictions', or None if the analysis fails.
         """
-        image = None
         try:
+            # Open the image using Pillow and convert to RGB to ensure compatibility
             image = Image.open(file_path).convert("RGB")
-        except (FileNotFoundError, UnidentifiedImageError):
-            try:
-                cap = cv2.VideoCapture(file_path)
-                ret, frame = cap.read()
-                if ret:
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    image = Image.fromarray(frame_rgb)
-                cap.release()
-            except Exception as e:
-                print(f"Error opening or processing file (image/video): {e}")
-                return None
-
-        if image is None:
-            print(f"Could not extract any image from file: {file_path}")
+        except (FileNotFoundError, UnidentifiedImageError) as e:
+            print(f"Error opening or processing image file: {e}")
             return None
 
         try:
-            # Process the image and get tensors
-            inputs = self.processor(images=image, return_tensors="pt")
-            
-            # Perform inference
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                logits = outputs.logits
+            # Pass the image to the pipeline for classification
+            result = self.pipe(image)
 
-            # The model has two outputs: 'Deepfake' and 'Realism'.
-            # Logits are raw scores. We apply softmax to get probabilities.
-            # A higher score for 'Deepfake' means it's likely fake.
-            # A higher score for 'Realism' means it's likely real.
+            # The result is a list of dictionaries.
+            if not result:
+                return None
             
-            # Find the index of the 'FAKE'/'Deepfake' class
-            fake_index = 0
-            real_index = 1
-            if self.model.config.id2label[0] == 'Realism':
-                real_index = 0
-                fake_index = 1
-                
-            # Get the probability of the image being FAKE
-            # We are interested in the 'Deepfake' score
-            probability = torch.nn.functional.softmax(logits, dim=1)[0][fake_index].item()
+            # Create a mapping of uppercase labels to scores for easier access
+            predictions = {str(p['label']).upper(): p['score'] for p in result}
             
-            # Determine label based on which logit is larger
-            predicted_class_id = logits.argmax(-1).item()
-            raw_label = self.model.config.id2label[predicted_class_id]
+            # Identify the best overall prediction
+            best_prediction = max(result, key=lambda x: x['score'])
+            best_label_raw = str(best_prediction['label']).upper()
+            best_score = best_prediction['score']
+
+            # Determine explicit scores for REAL and FAKE (or similar)
+            # 0: real, 1: fake is the most common mapping for deepfake binary classifiers
+            # Adding REALISM and DEEPFAKE for newer model compatibility
+            real_score = predictions.get('REAL', predictions.get('REALISM', predictions.get('LABEL_0', 0.0)))
+            fake_score = predictions.get('FAKE', predictions.get('DEEPFAKE', predictions.get('LABEL_1', 0.0)))
+
+            # If we couldn't find explicit REAL/FAKE or LABEL_0/1, try logic-based inference
+            if all(k not in predictions for k in ['REAL', 'REALISM', 'LABEL_0']):
+                # If we have a known synthetic label, real is 1 - synthetic
+                for syn_label in ['FAKE', 'DEEPFAKE', 'SYNTHETIC', 'GENERATED', 'LABEL_1']:
+                    if syn_label in predictions:
+                        real_score = 1.0 - predictions[syn_label]
+                        break
             
-            if raw_label == 'Deepfake':
-                label = 'FAKE'
-                score = probability
-            elif raw_label == 'Realism':
-                label = 'REAL'
-                score = 1 - probability # Score for 'REAL' is 1 - P(FAKE)
-            else:
-                label = raw_label # Fallback
-                score = probability
+            if all(k not in predictions for k in ['FAKE', 'DEEPFAKE', 'LABEL_1']):
+                fake_score = 1.0 - real_score
 
             return {
-                "label": label,
-                "score": round(score, 4)
+                "best_label": best_label_raw,
+                "best_score": round(best_score, 4),
+                "real_score": round(real_score, 4),
+                "fake_score": round(fake_score, 4),
+                "all_predictions": result
             }
         except Exception as e:
             print(f"Error during model inference: {e}")
