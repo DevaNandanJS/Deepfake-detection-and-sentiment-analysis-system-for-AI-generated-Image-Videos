@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Media Analysis</title>
+    <style>
+        :root {
+            --primary-bg: #f8f9fa;
+            --container-bg: #ffffff;
+            --border-color: #dee2e6;
+            --text-color: #212529;
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --danger-color: #dc3545;
+            --success-color: #28a745;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        #main-container {
+            background-color: var(--container-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--border-color);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            padding: 2.5rem;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+        
+        p {
+            color: #6c757d;
+            margin-bottom: 2rem;
+        }
+
+        #upload-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        #media-input {
+            border: 2px dashed var(--border-color);
+            border-radius: 6px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        #media-input:hover {
+            border-color: var(--primary-color);
+            background-color: #f8f9fa;
+        }
+
+        #submit-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #submit-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        #submit-btn:not(:disabled):hover {
+            background-color: var(--primary-hover);
+        }
+
+        #status-indicator {
+            margin-top: 2rem;
+            font-weight: 500;
+            display: none;
+        }
+
+        #results-container {
+            margin-top: 2.5rem;
+            text-align: left;
+            display: none;
+        }
+        
+        .result-section {
+            padding: 1.5rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .result-section h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        #authenticity-results {
+             background-color: #e9f3ff; /* Light blue */
+             border-color: #b8d6fb;
+        }
+        
+        #moderation-results {
+            margin-top: 1.5rem;
+            background-color: #fff8e1; /* Light yellow */
+            border-color: #ffecb3;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+        }
+        .result-item strong {
+            margin-right: 1rem;
+        }
+        .result-item span {
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .status-synthetic { color: var(--danger-color); font-weight: bold; }
+        .status-real { color: var(--success-color); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="main-container">
+        <h1>Media Analysis Pipeline</h1>
+        <p>Upload an image or video to analyze its authenticity and content safety.</p>
+        <form id="upload-form">
+            <input type="file" id="media-input" name="media" accept="image/*,video/*" required>
+            <button type="submit" id="submit-btn">Analyze Media Authenticity</button>
+        </form>
+        <div id="status-indicator">Initializing...</div>
+        <div id="results-container">
+            <div id="authenticity-results" class="result-section">
+                <h2>Stage 1: Authenticity Analysis</h2>
+                <div id="auth-content"></div>
+            </div>
+            <div id="moderation-results" class="result-section">
+                <h2>Stage 2: Safety & Moderation</h2>
+                <div id="mod-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('upload-form');
+        const mediaInput = document.getElementById('media-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const statusIndicator = document.getElementById('status-indicator');
+        const resultsContainer = document.getElementById('results-container');
+        const authContent = document.getElementById('auth-content');
+        const modContent = document.getElementById('mod-content');
+
+        const API_URL = 'http://localhost:8000/api/v1/analyze-media';
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const file = mediaInput.files[0];
+            if (!file) {
+                alert('Please select a file to analyze.');
+                return;
+            }
+
+            // Reset UI and show status
+            submitBtn.disabled = true;
+            resultsContainer.style.display = 'none';
+            statusIndicator.style.display = 'block';
+            statusIndicator.style.color = 'var(--text-color)';
+            
+            const statusUpdates = [
+                { text: "Initializing...", delay: 0 },
+                { text: "Executing Stage 1: Authenticity Analysis...", delay: 500 },
+                { text: "Executing Stage 2: Safety Moderation...", delay: 1000 }
+            ];
+
+            let delay = 0;
+            statusUpdates.forEach(update => {
+                delay += update.delay;
+                setTimeout(() => { statusIndicator.textContent = update.text; }, delay);
+            });
+
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server responded with status ${response.status}`);
+                }
+
+                const data = await response.json();
+                renderResults(data);
+
+            } catch (error) {
+                statusIndicator.textContent = `Error: ${error.message}`;
+                statusIndicator.style.color = 'var(--danger-color)';
+            } finally {
+                // Hide status and re-enable button
+                setTimeout(() => {
+                    statusIndicator.style.display = 'none';
+                    submitBtn.disabled = false;
+                }, 1000);
+            }
+        });
+
+        function renderResults(data) {
+            // Clear previous results
+            authContent.innerHTML = '';
+            modContent.innerHTML = '';
+
+            // Render Authenticity
+            const isSynthetic = data.is_synthetic;
+            const authStatusText = isSynthetic ? 'Synthetic (FAKE)' : 'Authentic (REAL)';
+            const authStatusClass = isSynthetic ? 'status-synthetic' : 'status-real';
+            
+            authContent.innerHTML = `
+                <div class="result-item">
+                    <strong>Authenticity Status:</strong>
+                    <span class="${authStatusClass}">${authStatusText}</span>
+                </div>
+                <div class="result-item">
+                    <strong>Confidence Score:</strong>
+                    <span>${(data.authenticity_score * 100).toFixed(2)}%</span>
+                </div>
+            `;
+
+            // Render Moderation if available
+            if (data.moderation) {
+                document.getElementById('moderation-results').style.display = 'block';
+                if (typeof data.moderation === 'object' && data.moderation !== null) {
+                    // Try to parse the nested JSON content if it's a string
+                    let moderationDetails;
+                    try {
+                        moderationDetails = JSON.parse(data.moderation.message.content);
+                    } catch (e) {
+                        moderationDetails = data.moderation;
+                    }
+                    
+                    let contentHtml = '<pre>' + JSON.stringify(moderationDetails, null, 2) + '</pre>';
+                    modContent.innerHTML = contentHtml;
+                    
+                } else {
+                     modContent.textContent = data.moderation.reason || 'No details available.';
+                }
+            } else {
+                document.getElementById('moderation-results').style.display = 'none';
+            }
+
+            resultsContainer.style.display = 'block';
+        }
+    </script>
+
+</body>
+</html>
