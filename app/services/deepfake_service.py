@@ -1,5 +1,6 @@
 from transformers import pipeline
 from PIL import Image, UnidentifiedImageError
+from app.core.config import settings
 
 class DeepfakeDetector:
     """
@@ -13,8 +14,7 @@ class DeepfakeDetector:
         """
         try:
             # Load the specified model for image classification
-            # Using the model as specified in the original code.
-            self.pipe = pipeline("image-classification", model="ScuolaX/MT-deepfake-detector")
+            self.pipe = pipeline("image-classification", model=settings.DEEPFAKE_MODEL)
         except Exception as e:
             # Handle potential errors during model loading (e.g., network issues)
             print(f"Error loading model: {e}")

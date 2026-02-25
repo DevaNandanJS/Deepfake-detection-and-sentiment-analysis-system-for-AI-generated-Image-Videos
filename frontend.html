@@ -106,6 +106,7 @@
             padding: 1.5rem;
             border-radius: 6px;
             border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
         }
 
         .result-section h2 {
@@ -120,9 +121,13 @@
              background-color: #e9f3ff; /* Light blue */
              border-color: #b8d6fb;
         }
+
+        #sentiment-results {
+            background-color: #f3e5f5; /* Light purple */
+            border-color: #e1bee7;
+        }
         
         #moderation-results {
-            margin-top: 1.5rem;
             background-color: #fff8e1; /* Light yellow */
             border-color: #ffecb3;
         }
@@ -161,8 +166,12 @@
                 <h2>Stage 1: Authenticity Analysis</h2>
                 <div id="auth-content"></div>
             </div>
+            <div id="sentiment-results" class="result-section">
+                <h2>Stage 2: Sentiment & Emotion Analysis</h2>
+                <div id="sentiment-content"></div>
+            </div>
             <div id="moderation-results" class="result-section">
-                <h2>Stage 2: Safety & Moderation</h2>
+                <h2>Stage 3: Safety & Moderation</h2>
                 <div id="mod-content"></div>
             </div>
         </div>
@@ -175,6 +184,7 @@
         const statusIndicator = document.getElementById('status-indicator');
         const resultsContainer = document.getElementById('results-container');
         const authContent = document.getElementById('auth-content');
+        const sentimentContent = document.getElementById('sentiment-content');
         const modContent = document.getElementById('mod-content');
 
         const API_URL = 'http://localhost:8000/api/v1/analyze-media';
@@ -197,7 +207,8 @@
             const statusUpdates = [
                 { text: "Initializing...", delay: 0 },
                 { text: "Executing Stage 1: Authenticity Analysis...", delay: 500 },
-                { text: "Executing Stage 2: Safety Moderation...", delay: 1000 }
+                { text: "Executing Stage 2: Sentiment Analysis...", delay: 1000 },
+                { text: "Executing Stage 3: Safety Moderation...", delay: 1500 }
             ];
 
             let delay = 0;
@@ -232,13 +243,14 @@
                 setTimeout(() => {
                     statusIndicator.style.display = 'none';
                     submitBtn.disabled = false;
-                }, 1000);
+                }, 2000);
             }
         });
 
         function renderResults(data) {
             // Clear previous results
             authContent.innerHTML = '';
+            sentimentContent.innerHTML = '';
             modContent.innerHTML = '';
 
             // Render Authenticity
@@ -271,19 +283,43 @@
                 `;
             }
 
+            // Render Sentiment
+            if (data.sentiment) {
+                document.getElementById('sentiment-results').style.display = 'block';
+                sentimentContent.innerHTML = `
+                    <div class="result-item">
+                        <strong>Top Sentiment:</strong>
+                        <span>${data.sentiment.sentiment_label}</span>
+                    </div>
+                    <div class="result-item">
+                        <strong>Score:</strong>
+                        <span>${(data.sentiment.sentiment_score * 100).toFixed(2)}%</span>
+                    </div>
+                    <div style="margin-top: 1rem; font-size: 0.8rem; color: #6c757d;">
+                        <strong>All Emotions:</strong>
+                        <pre style="background: #f1f3f5; padding: 0.5rem; border-radius: 4px; overflow-x: auto;">${JSON.stringify(data.sentiment.all_sentiments, null, 2)}</pre>
+                    </div>
+                `;
+            } else {
+                document.getElementById('sentiment-results').style.display = 'none';
+            }
+
             // Render Moderation if available
             if (data.moderation) {
                 document.getElementById('moderation-results').style.display = 'block';
                 if (typeof data.moderation === 'object' && data.moderation !== null) {
-                    // Try to parse the nested JSON content if it's a string
-                    let moderationDetails;
-                    try {
-                        moderationDetails = JSON.parse(data.moderation.message.content);
-                    } catch (e) {
-                        moderationDetails = data.moderation;
+                    let moderationDetails = data.moderation;
+                    if (data.moderation.message && data.moderation.message.content) {
+                        try {
+                            moderationDetails = JSON.parse(data.moderation.message.content);
+                        } catch (e) {
+                            moderationDetails = data.moderation.message.content;
+                        }
                     }
                     
-                    let contentHtml = '<pre>' + JSON.stringify(moderationDetails, null, 2) + '</pre>';
+                    let contentHtml = '<pre style="background: #f1f3f5; padding: 0.5rem; border-radius: 4px; overflow-x: auto;">' + 
+                                     (typeof moderationDetails === 'string' ? moderationDetails : JSON.stringify(moderationDetails, null, 2)) + 
+                                     '</pre>';
                     modContent.innerHTML = contentHtml;
                     
                 } else {

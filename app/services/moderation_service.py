@@ -1,13 +1,12 @@
 import base64
 import httpx
 import json
+from app.core.config import settings
 
 class ModerationEngine:
     """
     A service to evaluate the safety of an image using a local Ollama instance.
     """
-    OLLAMA_API_URL = "http://localhost:11434/api/chat"
-    MODEL_NAME = "llava-llama3"
     
     def _encode_image_to_base64(self, file_path: str) -> str:
         """
@@ -34,7 +33,7 @@ class ModerationEngine:
             image_base64 = self._encode_image_to_base64(file_path)
             
             payload = {
-                "model": self.MODEL_NAME,
+                "model": settings.OLLAMA_MODEL,
                 "messages": [
                     {
                         "role": "user",
@@ -47,7 +46,7 @@ class ModerationEngine:
             }
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(self.OLLAMA_API_URL, json=payload, timeout=30.0)
+                response = await client.post(settings.OLLAMA_URL, json=payload, timeout=30.0)
                 response.raise_for_status()
                 
             return json.loads(response.text)
