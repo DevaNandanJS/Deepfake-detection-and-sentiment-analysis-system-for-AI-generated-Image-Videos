@@ -48,13 +48,27 @@ async def analyze_media(file: UploadFile = File(...)) -> Dict[str, Any]:
         if not authenticity_result:
             raise HTTPException(status_code=500, detail="Authenticity analysis failed.")
 
+        # Extract label and score
+        label = authenticity_result.get("label", "").upper()
+        score = authenticity_result.get("score", 0.0)
+        
+        # Define keywords that indicate synthetic/fake media
+        SYNTHETIC_LABELS = {"FAKE", "SYNTHETIC", "GENERATED", "AI_GENERATED", "DEEPFAKE"}
+
+        # Confidence Threshold: adjust this value (0.0 to 1.0) to balance 
+        # sensitivity and false positives. High values (e.g. 0.8) are more strict.
+        CONFIDENCE_THRESHOLD = 0.8
+        
+        is_synthetic = (label in SYNTHETIC_LABELS and score >= CONFIDENCE_THRESHOLD)
+
         # Structure the initial response
-        is_synthetic = authenticity_result.get("label") == "FAKE"
         final_response = {
             "is_synthetic": is_synthetic,
-            "authenticity_score": authenticity_result.get("score"),
+            "authenticity_score": score,
+            "detected_label": label,
             "file_name": file.filename,
             "content_type": file.content_type,
+            "debug_info": authenticity_result.get("all_predictions")  # Helpful for debugging false positives
         }
 
         # --- Conditional Logic Gate: Safety Moderation ---

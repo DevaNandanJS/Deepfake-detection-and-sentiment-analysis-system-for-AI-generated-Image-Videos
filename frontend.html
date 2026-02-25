@@ -255,7 +255,21 @@
                     <strong>Confidence Score:</strong>
                     <span>${(data.authenticity_score * 100).toFixed(2)}%</span>
                 </div>
+                <div class="result-item">
+                    <strong>Detected Label:</strong>
+                    <span>${data.detected_label}</span>
+                </div>
             `;
+
+            // Add Debug info if available
+            if (data.debug_info) {
+                authContent.innerHTML += `
+                    <div style="margin-top: 1rem; font-size: 0.8rem; color: #6c757d;">
+                        <strong>Debug Info (All Predictions):</strong>
+                        <pre style="background: #f1f3f5; padding: 0.5rem; border-radius: 4px; overflow-x: auto;">${JSON.stringify(data.debug_info, null, 2)}</pre>
+                    </div>
+                `;
+            }
 
             // Render Moderation if available
             if (data.moderation) {

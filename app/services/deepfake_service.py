@@ -13,6 +13,7 @@ class DeepfakeDetector:
         """
         try:
             # Load the specified model for image classification
+            # Using the model as specified in the original code.
             self.pipe = pipeline("image-classification", model="ScuolaX/MT-deepfake-detector")
         except Exception as e:
             # Handle potential errors during model loading (e.g., network issues)
@@ -28,12 +29,12 @@ class DeepfakeDetector:
             file_path: The path to the image file to be analyzed.
 
         Returns:
-            A dictionary with the 'label' ('REAL' or 'FAKE') and a 'score',
+            A dictionary with the 'label', 'score', and 'all_predictions',
             or None if the analysis fails.
         """
         try:
-            # Open the image using Pillow
-            image = Image.open(file_path)
+            # Open the image using Pillow and convert to RGB to ensure compatibility
+            image = Image.open(file_path).convert("RGB")
         except (FileNotFoundError, UnidentifiedImageError) as e:
             print(f"Error opening or processing image file: {e}")
             return None
@@ -42,16 +43,20 @@ class DeepfakeDetector:
             # Pass the image to the pipeline for classification
             result = self.pipe(image)
 
-            # The result is a list of dictionaries. Find the one with the highest score.
+            # The result is a list of dictionaries.
             if not result:
                 return None
             
             best_prediction = max(result, key=lambda x: x['score'])
             
-            # Return the label and score of the most likely class
+            # Normalize label to uppercase for robust comparison
+            label = str(best_prediction['label']).upper()
+            
+            # Return the label, score, and the full set of predictions for debugging
             return {
-                "label": best_prediction['label'],
-                "score": round(best_prediction['score'], 4)
+                "label": label,
+                "score": round(best_prediction['score'], 4),
+                "all_predictions": result
             }
         except Exception as e:
             print(f"Error during model inference: {e}")
