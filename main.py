@@ -62,7 +62,7 @@ async def analyze_media(file: UploadFile = File(...)) -> Dict[str, Any]:
 
         # --- Step One: Authenticity Analysis ---
         # Pass the file path to the deepfake detector.
-        authenticity_result = detector.detect(temp_file_path)
+        authenticity_result = await detector.detect(temp_file_path)
         if not authenticity_result:
             raise HTTPException(status_code=500, detail="Authenticity analysis failed.")
 

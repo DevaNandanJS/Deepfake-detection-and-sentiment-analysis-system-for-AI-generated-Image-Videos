@@ -1,31 +1,32 @@
-import cv2
-from transformers import pipeline
+from transformers import AutoImageProcessor, AutoModelForImageClassification
 from PIL import Image, UnidentifiedImageError
+import torch
+import cv2
 import os
 
 class DeepfakeDetector:
     """
     A service to detect whether an image or video frame is real or a deepfake using a
-    pre-trained Hugging Face model.
+    pre-trained Hugging Face model. This implementation matches the official usage
+    example for the model to ensure accuracy.
     """
     def __init__(self):
         """
-        Initializes the DeepfakeDetector by loading the image classification
-        pipeline from Hugging Face.
+        Initializes the DeepfakeDetector by loading the model and its processor
+        from Hugging Face.
         """
         self.model_name = "prithivMLmods/Deep-Fake-Detector-v2-Model"
         try:
-            # Load the specified model for image classification
-            self.pipe = pipeline("image-classification", model=self.model_name)
+            self.processor = AutoImageProcessor.from_pretrained(self.model_name)
+            self.model = AutoModelForImageClassification.from_pretrained(self.model_name)
         except Exception as e:
-            # Handle potential errors during model loading (e.g., network issues)
             print(f"Error loading model: {e}")
             raise
 
-    def detect(self, file_path: str) -> dict | None:
+    async def detect(self, file_path: str) -> dict | None:
         """
-        Analyzes an image or video from a given file path to determine if it is a
-        deepfake.
+        Asynchronously analyzes an image or video from a given file path to determine
+        if it is a deepfake.
 
         Args:
             file_path: The path to the file to be analyzed.
@@ -36,15 +37,12 @@ class DeepfakeDetector:
         """
         image = None
         try:
-            # Try to open as an image using Pillow
-            image = Image.open(file_path)
+            image = Image.open(file_path).convert("RGB")
         except (FileNotFoundError, UnidentifiedImageError):
-            # If Pillow fails, try as a video using OpenCV
             try:
                 cap = cv2.VideoCapture(file_path)
                 ret, frame = cap.read()
                 if ret:
-                    # Convert BGR (OpenCV) to RGB (Pillow)
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     image = Image.fromarray(frame_rgb)
                 cap.release()
@@ -57,29 +55,47 @@ class DeepfakeDetector:
             return None
 
         try:
-            # Pass the image to the pipeline for classification
-            result = self.pipe(image)
+            # Process the image and get tensors
+            inputs = self.processor(images=image, return_tensors="pt")
+            
+            # Perform inference
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                logits = outputs.logits
 
-            # The result is a list of dictionaries. Find the one with the highest score.
-            if not result:
-                return None
+            # The model has two outputs: 'Deepfake' and 'Realism'.
+            # Logits are raw scores. We apply softmax to get probabilities.
+            # A higher score for 'Deepfake' means it's likely fake.
+            # A higher score for 'Realism' means it's likely real.
             
-            best_prediction = max(result, key=lambda x: x['score'])
+            # Find the index of the 'FAKE'/'Deepfake' class
+            fake_index = 0
+            real_index = 1
+            if self.model.config.id2label[0] == 'Realism':
+                real_index = 0
+                fake_index = 1
+                
+            # Get the probability of the image being FAKE
+            # We are interested in the 'Deepfake' score
+            probability = torch.nn.functional.softmax(logits, dim=1)[0][fake_index].item()
             
-            # Map labels to 'REAL' and 'FAKE'
-            # The model 'prithivMLmods/Deep-Fake-Detector-v2-Model' uses 'Realism' and 'Deepfake'
-            raw_label = best_prediction['label']
+            # Determine label based on which logit is larger
+            predicted_class_id = logits.argmax(-1).item()
+            raw_label = self.model.config.id2label[predicted_class_id]
+            
             if raw_label == 'Deepfake':
                 label = 'FAKE'
+                score = probability
             elif raw_label == 'Realism':
                 label = 'REAL'
+                score = 1 - probability # Score for 'REAL' is 1 - P(FAKE)
             else:
                 label = raw_label # Fallback
+                score = probability
 
-            # Return the label and score of the most likely class
             return {
                 "label": label,
-                "score": round(best_prediction['score'], 4)
+                "score": round(score, 4)
             }
         except Exception as e:
             print(f"Error during model inference: {e}")
