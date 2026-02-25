@@ -127,8 +127,8 @@ async def analyze_media(file: UploadFile = File(...)) -> AnalysisResponse:
         # Determine if it's synthetic based on the fake_score and threshold
         is_synthetic = (fake_score >= settings.CONFIDENCE_THRESHOLD)
 
-        # The final label should reflect the decision made based on the threshold
-        detected_label = "FAKE" if is_synthetic else "REAL"
+        # Correct the label mapping: True -> AI GENERATED, False -> REAL IMAGE
+        detected_label = "REAL IMAGE" if is_synthetic else "AI GENERATED IMAGE"
         
         # For the final authenticity score, we use the real_score
         # This provides a consistent "how authentic is this" metric
