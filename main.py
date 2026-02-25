@@ -1,8 +1,10 @@
 import os
 import tempfile
+import mimetypes
 from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse
 from app.services.deepfake_service import DeepfakeDetector
 from app.services.moderation_service import ModerationEngine
 
@@ -23,6 +25,15 @@ except Exception as e:
 moderator = ModerationEngine()
 
 
+@app.get("/")
+async def serve_frontend():
+    """Serves the frontend application."""
+    frontend_path = os.path.join(os.path.dirname(__file__), "frontend.html")
+    if os.path.exists(frontend_path):
+        return FileResponse(frontend_path)
+    raise HTTPException(status_code=404, detail="Frontend file not found.")
+
+
 @app.post("/api/v1/analyze-media", response_model=Dict[str, Any])
 async def analyze_media(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
@@ -38,9 +49,16 @@ async def analyze_media(file: UploadFile = File(...)) -> Dict[str, Any]:
     try:
         # --- Secure Temporary File Handling ---
         # Create a named temporary file to securely store the upload on disk.
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
-            temp_file.write(await file.read())
+        suffix = os.path.splitext(file.filename)[1] if file.filename else ""
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
             temp_file_path = temp_file.name
+
+        # Determine content type if not provided or vague
+        content_type = file.content_type
+        if not content_type or content_type == "application/octet-stream":
+            content_type, _ = mimetypes.guess_type(file.filename or "")
 
         # --- Step One: Authenticity Analysis ---
         # Pass the file path to the deepfake detector.
@@ -54,22 +72,21 @@ async def analyze_media(file: UploadFile = File(...)) -> Dict[str, Any]:
             "is_synthetic": is_synthetic,
             "authenticity_score": authenticity_result.get("score"),
             "file_name": file.filename,
-            "content_type": file.content_type,
+            "content_type": content_type,
         }
 
         # --- Conditional Logic Gate: Safety Moderation ---
         if is_synthetic:
             # If media is a synthetic image, proceed to moderation.
-            if file.content_type and file.content_type.startswith("image/"):
+            if content_type and content_type.startswith("image/"):
                 safety_result = await moderator.evaluate_safety(temp_file_path)
                 final_response["moderation"] = safety_result
             # If media is a video, add a placeholder for future implementation.
-            elif file.content_type and file.content_type.startswith("video/"):
-                # TODO: Implement video frame extraction logic here.
-                # For now, we add a placeholder note to the response.
+            elif content_type and content_type.startswith("video/"):
+                # For now, we still add a placeholder note, but we could extend this.
                 final_response["moderation"] = {
                     "status": "skipped",
-                    "reason": "Video moderation requires frame extraction and is not yet implemented."
+                    "reason": "Video moderation requires full frame analysis and is not yet implemented."
                 }
 
         return final_response

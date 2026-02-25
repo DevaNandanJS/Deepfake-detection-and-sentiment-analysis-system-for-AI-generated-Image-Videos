@@ -177,7 +177,7 @@
         const authContent = document.getElementById('auth-content');
         const modContent = document.getElementById('mod-content');
 
-        const API_URL = 'http://localhost:8000/api/v1/analyze-media';
+        const API_URL = '/api/v1/analyze-media';
 
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -260,21 +260,35 @@
             // Render Moderation if available
             if (data.moderation) {
                 document.getElementById('moderation-results').style.display = 'block';
-                if (typeof data.moderation === 'object' && data.moderation !== null) {
-                    // Try to parse the nested JSON content if it's a string
-                    let moderationDetails;
-                    try {
-                        moderationDetails = JSON.parse(data.moderation.message.content);
-                    } catch (e) {
-                        moderationDetails = data.moderation;
-                    }
-                    
-                    let contentHtml = '<pre>' + JSON.stringify(moderationDetails, null, 2) + '</pre>';
-                    modContent.innerHTML = contentHtml;
-                    
+                
+                let contentHtml = '';
+                if (data.moderation.status === 'success') {
+                    const eval = data.moderation.evaluation;
+                    contentHtml = `
+                        <div class="result-item">
+                            <strong>Safe for Work:</strong>
+                            <span class="${eval.safe ? 'status-real' : 'status-synthetic'}">${eval.safe ? 'YES' : 'NO'}</span>
+                        </div>
+                        <div class="result-item">
+                            <strong>Reasoning:</strong>
+                            <p>${eval.reason || 'No detailed reason provided.'}</p>
+                        </div>
+                    `;
+                } else if (data.moderation.status === 'error' || data.moderation.status === 'skipped') {
+                    contentHtml = `
+                        <div class="result-item">
+                            <strong>Status:</strong>
+                            <span>${data.moderation.status.toUpperCase()}</span>
+                        </div>
+                        <div class="result-item">
+                            <strong>Reason:</strong>
+                            <span>${data.moderation.reason || 'Service error.'}</span>
+                        </div>
+                    `;
                 } else {
-                     modContent.textContent = data.moderation.reason || 'No details available.';
+                    contentHtml = '<pre>' + JSON.stringify(data.moderation, null, 2) + '</pre>';
                 }
+                modContent.innerHTML = contentHtml;
             } else {
                 document.getElementById('moderation-results').style.display = 'none';
             }
