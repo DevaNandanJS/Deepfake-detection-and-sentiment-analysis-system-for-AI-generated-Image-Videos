@@ -80,8 +80,20 @@ async def run_diagnostics():
         img.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
 
-        # Encapsulate the in-memory file in FastAPI's UploadFile structure
-        upload_file = UploadFile(filename="diagnostic_test.png", file=img_byte_arr, content_type="image/png")
+        # To avoid version conflicts with FastAPI's UploadFile, we create a simple mock
+        # object that has the necessary attributes (`filename`, `read`, `content_type`).
+        class MockUploadFile:
+            def __init__(self, filename, file_bytes, content_type):
+                self.filename = filename
+                self._file = io.BytesIO(file_bytes)
+                self.content_type = content_type
+
+            async def read(self):
+                return self._file.read()
+
+        # Get the bytes from the dummy image
+        img_bytes = img_byte_arr.getvalue()
+        upload_file = MockUploadFile(filename="diagnostic_test.png", file_bytes=img_bytes, content_type="image/png")
 
         print("   -> Simulating API call to the 'analyze_media' function...")
         # Await the function since it's an async function

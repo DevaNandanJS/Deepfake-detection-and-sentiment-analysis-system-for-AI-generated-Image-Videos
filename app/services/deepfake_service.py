@@ -13,9 +13,10 @@ class DeepfakeDetector:
         Initializes the DeepfakeDetector by loading the image classification
         pipeline from Hugging Face.
         """
+        self.model_name = "prithivMLmods/Deep-Fake-Detector-v2-Model"
         try:
             # Load the specified model for image classification
-            self.pipe = pipeline("image-classification", model="prithivMLmods/Deep-Fake-Detector-v2-Model")
+            self.pipe = pipeline("image-classification", model=self.model_name)
         except Exception as e:
             # Handle potential errors during model loading (e.g., network issues)
             print(f"Error loading model: {e}")
