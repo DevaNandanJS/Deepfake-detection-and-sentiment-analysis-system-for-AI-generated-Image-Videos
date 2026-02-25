@@ -16,7 +16,7 @@ class Settings:
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llava-llama3")
     
     # Business logic thresholds
-    CONFIDENCE_THRESHOLD: float = 0.7
+    CONFIDENCE_THRESHOLD: float = 0.8
     SYNTHETIC_LABELS: set = {"FAKE", "SYNTHETIC", "GENERATED", "AI_GENERATED", "DEEPFAKE", "LABEL_1"}
 
 settings = Settings()

@@ -52,7 +52,7 @@ class DeepfakeDetector:
             
             # Identify the best overall prediction
             best_prediction = max(result, key=lambda x: x['score'])
-            best_label = str(best_prediction['label']).upper()
+            best_label_raw = str(best_prediction['label']).upper()
             best_score = best_prediction['score']
 
             # Determine explicit scores for REAL and FAKE (or similar)
@@ -73,7 +73,7 @@ class DeepfakeDetector:
                 fake_score = 1.0 - real_score
 
             return {
-                "best_label": best_label,
+                "best_label": best_label_raw,
                 "best_score": round(best_score, 4),
                 "real_score": round(real_score, 4),
                 "fake_score": round(fake_score, 4),
