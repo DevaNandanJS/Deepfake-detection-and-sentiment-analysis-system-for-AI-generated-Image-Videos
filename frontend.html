@@ -264,8 +264,12 @@
                     <span class="${authStatusClass}">${authStatusText}</span>
                 </div>
                 <div class="result-item">
-                    <strong>Confidence Score:</strong>
+                    <strong>Authenticity Score:</strong>
                     <span>${(data.authenticity_score * 100).toFixed(2)}%</span>
+                </div>
+                <div class="result-item">
+                    <strong>Verdict Confidence:</strong>
+                    <span>${(data.confidence * 100).toFixed(2)}%</span>
                 </div>
                 <div class="result-item">
                     <strong>Detected Label:</strong>

@@ -49,11 +49,18 @@ class ModerationEngine:
                 response = await client.post(settings.OLLAMA_URL, json=payload, timeout=30.0)
                 response.raise_for_status()
                 
-            return json.loads(response.text)
+            try:
+                # First try to parse as JSON
+                return response.json()
+            except (json.JSONDecodeError, ValueError):
+                # If not JSON, return as text if it seems valid
+                if response.text:
+                    return {"message": {"content": response.text}}
+                raise
 
-        except httpx.RequestError as e:
-            print(f"Error querying Ollama: {e}")
-            return {"status": "error", "reason": "Ollama service unreachable"}
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error from Ollama: {e}")
+            return {"status": "error", "reason": f"HTTP {e.response.status_code} error from Ollama"}
         except json.JSONDecodeError as e:
             print(f"Error parsing Ollama response: {e}")
             return {"status": "error", "reason": "Invalid JSON response from Ollama"}
