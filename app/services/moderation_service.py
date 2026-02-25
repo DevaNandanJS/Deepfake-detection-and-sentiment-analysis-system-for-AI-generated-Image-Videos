@@ -9,7 +9,7 @@ class ModerationEngine:
     """
     def __init__(self):
         self.ollama_api_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/chat")
-        self.model_name = os.getenv("OLLAMA_MODEL", "llava-llama3")
+        self.model_name = os.getenv("OLLAMA_MODEL", "llava:latest")
     
     def _encode_image_to_base64(self, file_path: str) -> str:
         """
@@ -46,7 +46,7 @@ class ModerationEngine:
             }
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(self.ollama_api_url, json=payload, timeout=45.0)
+                response = await client.post(self.ollama_api_url, json=payload, timeout=180.0)
                 if response.status_code == 404:
                     return {"status": "error", "reason": f"Model '{self.model_name}' not found in Ollama."}
                 response.raise_for_status()
