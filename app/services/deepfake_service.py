@@ -56,10 +56,15 @@ class DeepfakeDetector:
             best_score = best_prediction['score']
 
             # Determine explicit scores for REAL and FAKE (or similar)
-            # 0: real, 1: fake is the most common mapping for deepfake binary classifiers
-            # Adding REALISM and DEEPFAKE for newer model compatibility
-            real_score = predictions.get('REAL', predictions.get('REALISM', predictions.get('LABEL_0', 0.0)))
-            fake_score = predictions.get('FAKE', predictions.get('DEEPFAKE', predictions.get('LABEL_1', 0.0)))
+            # Standard mapping for prithivMLmods/Deep-Fake-Detector-v2-Model:
+            # LABEL_0 (Realism) -> real_score, LABEL_1 (Deepfake) -> fake_score
+            real_score = predictions.get('REALISM', predictions.get('LABEL_0', 0.0))
+            fake_score = predictions.get('DEEPFAKE', predictions.get('LABEL_1', 0.0))
+
+            # Fallback if names are different
+            if all(k in predictions for k in ['REAL', 'FAKE']):
+                real_score = predictions.get('REAL', 0.0)
+                fake_score = predictions.get('FAKE', 0.0)
 
             # If we couldn't find explicit REAL/FAKE or LABEL_0/1, try logic-based inference
             if all(k not in predictions for k in ['REAL', 'REALISM', 'LABEL_0']):
